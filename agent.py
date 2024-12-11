@@ -30,7 +30,7 @@ class ActorCriticAgent(nn.Module):
         self.pi_optimizer = torch.optim.Adam(self.pi.parameters(), lr=config.pi_lr)
         self.q_optimizer = torch.optim.Adam(self.q_params, lr=config.q_lr) # only need one optimizer for both q updates
 
-    def update(self, batch):
+    def update(self, batch, step_idx, writer=None):
         # batch: dict of {
         #   state: [b, h, w, 3]
         #   new_state: [b, h, w, 3]
@@ -46,6 +46,11 @@ class ActorCriticAgent(nn.Module):
         q1_out = self.q1(state, action) # [b,]
         q2_out = self.q2(state, action) # [b,]
 
+        if writer:
+            q_avg = (q1_out.detach() + q2_out.detach()).mean().item()
+            print("Train QAvg: {}".format(q_avg))
+            writer.add_scalar("Train QAvg", q_avg, step_idx)
+
         with torch.no_grad():
             pi_target_out = self.pi_target(new_state) # [b, action_dim]
             q1_target_out = self.q1_target(new_state, pi_target_out) # [b,]
@@ -56,6 +61,9 @@ class ActorCriticAgent(nn.Module):
         q1_loss = ((q1_out - bellman_target)**2).mean()
         q2_loss = ((q2_out - bellman_target)**2).mean()
         q_loss = q1_loss + q2_loss
+        if writer:
+            print("Train QLoss: {}".format(q_loss))
+            writer.add_scalar("Train QLoss", q_loss.detach().item())
         q_loss.backward()
         self.q_optimizer.step()
 
@@ -65,6 +73,9 @@ class ActorCriticAgent(nn.Module):
         self.pi_optimizer.zero_grad()
         pi_out = self.pi(state) # [b, action_dim]
         pi_loss = -torch.min(self.q1(state, pi_out), self.q2(state, pi_out)).mean()
+        if writer:
+            print("Train PiLoss: {}".format(pi_loss))
+            writer.add_scalar("Train PiLoss", pi_loss.detach().item())
         pi_loss.backward()
         self.pi_optimizer.step()
         for p in self.q_params:

@@ -1,4 +1,5 @@
 import random
+import argparse
 import gymnasium as gym
 import numpy as np
 from config import BcSacConfig
@@ -23,7 +24,7 @@ Training procedure (TD3 for now):
     -- Update policy via minimizing Qphi(s, u(s))
 """
 
-def train():
+def train(toy):
     env = gym.make("CarRacing-v3", render_mode="human", lap_complete_percent=0.95, domain_randomize=False, continuous=True)
     config = BcSacConfig()
     config.img_height = env.observation_space.shape[0]
@@ -33,6 +34,10 @@ def train():
     config.action_space = env.action_space
     config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: {}".format(config.device))
+
+    if toy:
+        config.prefill_steps = 10
+        config.update_interval = 10
 
     replay_buffer = ReplayBuffer(config)
     agent = ActorCriticAgent(config).to(config.device)
@@ -65,4 +70,7 @@ def train():
     env.close()
 
 if __name__ == "__main__":
-    train()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--toy", action="store_true", default=False)
+    args = parser.parse_args()
+    train(args.toy)

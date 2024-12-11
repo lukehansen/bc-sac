@@ -7,6 +7,7 @@ class BcSacConfig():
         self.max_buffer_size = 10_000
         self.gamma = 0.99
         self.polyak = 0.995
+        self.action_noise = 0.1 # Not needed for SAC
 
         # NN
         self.pi_lr = 1e-3

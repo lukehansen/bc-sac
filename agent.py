@@ -1,16 +1,20 @@
 import torch
+from torch import nn
 import copy
 from model import Actor, Critic
 import itertools
 import numpy as np
 
-class ActorCriticAgent:
+class ActorCriticAgent(nn.Module):
     def __init__(self, config):
+        super().__init__()
         self.config = config
 
         # Policy and two Q networks.
         self.pi = Actor(config)
+        print("Actor params: {}".format(sum([p.numel() for p in self.pi.parameters() if p.requires_grad])))
         self.q1 = Critic(config)
+        print("Critic params: {}".format(sum([p.numel() for p in self.q1.parameters() if p.requires_grad])))
         self.q2 = Critic(config)
         self.q_params = itertools.chain(self.q1.parameters(), self.q2.parameters())
 
@@ -27,16 +31,13 @@ class ActorCriticAgent:
         self.q_optimizer = torch.optim.Adam(self.q_params, lr=config.q_lr) # only need one optimizer for both q updates
 
     def update(self, batch):
-        # batch: dict of
+        # batch: dict of {
         #   state: [b, h, w, 3]
         #   new_state: [b, h, w, 3]
         #   action: [b, action_dim]
         #   reward: [b,]
         #   done: [b,]
-
-        # -- Compute Q targets: y = r + gamma * (1-d) * min Qtarget(s', utarget(s'))
-        # -- Update Q via minimizing MSE
-        # -- Update policy via minimizing Qphi(s, u(s))
+        # }
 
         state, action, reward, new_state, done = batch["state"], batch["action"], batch["reward"], batch["new_state"], batch["done"]
 
@@ -71,19 +72,21 @@ class ActorCriticAgent:
 
         # 3. Update target networks via Polyak averaging.
         with torch.no_grad():
-            params = itertools.chain(self.pi.parameters(), q_params)
+            params = itertools.chain(self.pi.parameters(), self.q_params)
             target_params = itertools.chain(self.pi_target.parameters(), self.q1_target.parameters(), self.q2_target.parameters())
             for p, p_targ in zip(params, target_params):
                 # In-place as in Spinningup.
                 p_targ.data.mul_(self.config.polyak)
                 p_targ.data.add_((1 - self.config.polyak) * p.data)
 
-    def act(self, state):
+    def act(self, state, noise=0):
         # state: [h, w, 3]
-        state = torch.as_tensor(state, dtype=torch.float32)
+        state = torch.as_tensor(state, dtype=torch.float32).to(self.config.device)
         state = state.permute(2, 0, 1).unsqueeze(0) # [1, 3, h, w]
         with torch.no_grad():
             means, _ = self.pi(state) # [b, action_dim]
-        # means are [-1, 1]. scale to action space limits.
-        means = self.config.action_space.low + (means.numpy() + 1) * (self.config.action_space.high - self.config.action_space.low) / 2
+        # means are [-1, 1]. add noise, scale, and clip.
+        means = means.cpu().numpy() + noise * np.random.randn(self.config.action_dim)
+        means = self.config.action_space.low + (means + 1) * (self.config.action_space.high - self.config.action_space.low) / 2
+        means = np.clip(means, self.config.action_space.low, self.config.action_space.high)
         return means # [b, action_dim]

@@ -28,18 +28,22 @@ def train():
     config = BcSacConfig()
     config.img_height = env.observation_space.shape[0]
     config.img_width = env.observation_space.shape[1]
+    config.observation_space = env.observation_space
     config.action_dim = env.action_space.shape[0]
     config.action_space = env.action_space
+    config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Using device: {}".format(config.device))
 
-    replay_buffer = ReplayBuffer(env.observation_space.shape, config.action_dim, config.max_buffer_size)
-    agent = ActorCriticAgent(config)
+    replay_buffer = ReplayBuffer(config)
+    agent = ActorCriticAgent(config).to(config.device)
 
     state, _ = env.reset()
     for step in range(config.num_steps):
         # Interact with environment.
-        action = agent.act(state).squeeze(0) # [action_dim]
+        action = agent.act(state, noise=config.action_noise).squeeze(0) # [action_dim]
+        print("Executing action: {}".format([round(a, 2) for a in action]))
         next_state, reward, done, trunc, info = env.step(action)
-        print("Step: {}, Reward: {}".format(step, reward))
+        print("Step: {}, Reward: {}".format(step, round(reward, 2)))
 
         # Store to buffer.
         replay_buffer.store(state, action, reward, next_state, done)

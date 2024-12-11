@@ -2,13 +2,15 @@ import numpy as np
 import torch
 
 class ReplayBuffer:
-    def __init__(self, state_dim, action_dim, size):
-        self.state_buf = np.zeros((size, *state_dim), dtype=np.float32)
-        self.new_state_buf = np.zeros((size, *state_dim), dtype=np.float32)
-        self.action_buf = np.zeros((size, action_dim), dtype=np.float32)
-        self.reward_buf = np.zeros(size, dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.float32)
-        self.ptr, self.size, self.max_size = 0, 0, size
+    def __init__(self, config):
+        self.config = config
+        state_dim = config.observation_space.shape
+        self.state_buf = np.zeros((config.max_buffer_size, *state_dim), dtype=np.float32)
+        self.new_state_buf = np.zeros((config.max_buffer_size, *state_dim), dtype=np.float32)
+        self.action_buf = np.zeros((config.max_buffer_size, config.action_dim), dtype=np.float32)
+        self.reward_buf = np.zeros(config.max_buffer_size, dtype=np.float32)
+        self.done_buf = np.zeros(config.max_buffer_size, dtype=np.float32)
+        self.ptr, self.size, self.max_size = 0, 0, config.max_buffer_size
 
     def store(self, state, action, reward, new_state, done):
         self.state_buf[self.ptr] = state
@@ -26,4 +28,4 @@ class ReplayBuffer:
                      action=self.action_buf[idxs],
                      reward=self.reward_buf[idxs],
                      done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in batch.items()}
+        return {k: torch.as_tensor(v, dtype=torch.float32).to(config.device) for k,v in batch.items()}

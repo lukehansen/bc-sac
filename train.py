@@ -40,7 +40,10 @@ def train():
     state, _ = env.reset()
     for step in range(config.num_steps):
         # Interact with environment.
-        action = agent.act(state, noise=config.action_noise).squeeze(0) # [action_dim]
+        if step > config.warmup_steps:
+            action = agent.act(state, noise=config.action_noise).squeeze(0) # [action_dim]
+        else:
+            action = env.action_space.sample()
         print("Executing action: {}".format([round(a, 2) for a in action]))
         next_state, reward, done, trunc, info = env.step(action)
         print("Step: {}, Reward: {}".format(step, round(reward, 2)))
@@ -53,7 +56,7 @@ def train():
         if done or trunc:
             state = env.reset()
 
-        if step >= config.warmup_steps and step % config.update_interval == 0:
+        if step >= config.prefill_steps and step % config.update_interval == 0:
             for i in range(config.update_interval):
                 batch = replay_buffer.sample_batch(config.batch_size)
                 agent.update(batch)

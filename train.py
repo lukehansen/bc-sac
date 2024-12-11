@@ -54,10 +54,11 @@ def train():
         state = next_state
 
         if done or trunc:
-            state = env.reset()
+            state, _ = env.reset()
 
         if step >= config.prefill_steps and step % config.update_interval == 0:
             for i in range(config.update_interval):
+                print("Update step {}".format(i))
                 batch = replay_buffer.sample_batch(config.batch_size)
                 agent.update(batch)
 

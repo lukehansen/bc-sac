@@ -13,5 +13,5 @@ class BcSacConfig():
         # NN
         self.pi_lr = 1e-3
         self.q_lr = 1e-3
-        self.batch_size = 100
+        self.batch_size = 32
         self.hidden_dim = 1024

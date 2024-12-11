@@ -43,8 +43,8 @@ class ActorCriticAgent(nn.Module):
 
         # 1. Update Q.
         self.q_optimizer.zero_grad()
-        q1_out = self.q1(state) # [b,]
-        q2_out = self.q2(state) # [b,]
+        q1_out = self.q1(state, action) # [b,]
+        q2_out = self.q2(state, action) # [b,]
 
         with torch.no_grad():
             pi_target_out = self.pi_target(new_state) # [b, action_dim]
@@ -64,7 +64,7 @@ class ActorCriticAgent(nn.Module):
             p.requires_grad = False
         self.pi_optimizer.zero_grad()
         pi_out = self.pi(state) # [b, action_dim]
-        pi_loss = -torch.min(self.q1(state, pi_out), self.q2(state, pi_out))
+        pi_loss = -torch.min(self.q1(state, pi_out), self.q2(state, pi_out)).mean()
         pi_loss.backward()
         self.pi_optimizer.step()
         for p in self.q_params:
@@ -82,11 +82,11 @@ class ActorCriticAgent(nn.Module):
     def act(self, state, noise=0):
         # state: [h, w, 3]
         state = torch.as_tensor(state, dtype=torch.float32).to(self.config.device)
-        state = state.permute(2, 0, 1).unsqueeze(0) # [1, 3, h, w]
+        state = state.unsqueeze(0) # [1, h, w, 3]
         with torch.no_grad():
-            means, _ = self.pi(state) # [b, action_dim]
+            means = self.pi(state).cpu().numpy() # [b, action_dim]
         # means are [-1, 1]. add noise, scale, and clip.
-        means = means.cpu().numpy() + noise * np.random.randn(self.config.action_dim)
+        means = means + noise * np.random.randn(self.config.action_dim)
         means = self.config.action_space.low + (means + 1) * (self.config.action_space.high - self.config.action_space.low) / 2
         means = np.clip(means, self.config.action_space.low, self.config.action_space.high)
         return means # [b, action_dim]

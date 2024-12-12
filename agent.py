@@ -91,15 +91,19 @@ class ActorCriticAgent(nn.Module):
                 p_targ.data.mul_(self.config.polyak)
                 p_targ.data.add_((1 - self.config.polyak) * p.data)
 
-    def act(self, state, noise=0):
+    def act(self, state, noise_factor=0):
         # state: [h, w, 3]
         state = torch.as_tensor(state, dtype=torch.float32).to(self.config.device)
         state = state.unsqueeze(0) # [1, h, w, 3]
         with torch.no_grad():
-            means = self.pi(state).cpu().numpy() # [b, action_dim]
-        # means are [-1, 1]. add noise, scale, and clip.
-        print("Means: {}".format(means))
-        means = means + noise * np.random.randn(self.config.action_dim)
-        means = self.config.action_space.low + (means + 1) * (self.config.action_space.high - self.config.action_space.low) / 2
-        means = np.clip(means, self.config.action_space.low, self.config.action_space.high)
-        return means # [b, action_dim]
+            raw_means = self.pi(state).cpu().numpy().squeeze(0) # [action_dim], -1 to 1
+        noise = np.random.randn(self.config.action_dim)
+        raw_means = raw_means + noise_factor * noise # [2], maybe out of bounds
+        raw_means = np.clip(raw_means, [-1, -1], [1, 1]) # [2], -1 to 1
+        # Decompose accel/brake.
+        decomposed_means = np.concatenate([raw_means, -raw_means[1:2]]) # [3]
+        # Manual clipping bc we're combining accel/brake.
+        decomposed_means = np.clip(decomposed_means, [-1, 0, 0], [1, 1, 1]) # [3]
+        # means = self.config.action_space.low + (means + 1) * (self.config.action_space.high - self.config.action_space.low) / 2
+        # means = np.clip(means, self.config.action_space.low, self.config.action_space.high)
+        return raw_means, decomposed_means # [b, action_dim]

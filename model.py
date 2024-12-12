@@ -26,7 +26,7 @@ class Actor(nn.Module):
         x = self.cnn(state) # [b, 32, h, w]
         x = x.flatten(1) # [b, 32 * h * w]
         x = F.relu(self.fc1(x)) # [b, 64]
-        means = self.fc2(x) # [b, action_dim], -1 to 1
+        means = F.tanh(self.fc2(x)) # [b, action_dim], -1 to 1
         # log_std_devs = self.log_std_dev(x) # [b, action_dim]
         return means #, log_std_devs
 

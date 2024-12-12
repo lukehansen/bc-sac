@@ -20,7 +20,7 @@ def train(args):
     config.img_height = env.observation_space.shape[0]
     config.img_width = env.observation_space.shape[1]
     config.observation_space = env.observation_space
-    config.action_dim = env.action_space.shape[0]
+    config.action_dim = 2 # env.action_space.shape[0]. Restricting accel/brake to a single axis. -1 is full brake, 1 is full gas.
     config.action_space = env.action_space
     config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: {}".format(config.device))
@@ -29,7 +29,7 @@ def train(args):
         config.prefill_steps = 10
         config.update_interval = 10
         config.warmup_steps = 10
-        config.noise = 0
+        config.action_noise = 0
 
     agent = ActorCriticAgent(config).to(config.device)
     if args.resume_run_id:
@@ -73,18 +73,18 @@ def train(args):
         for step_idx in range(config.steps_per_epoch):
             step = epoch * config.steps_per_epoch + step_idx
             # Interact with environment.
-            if step > config.warmup_steps:
-                action = agent.act(state, noise=config.action_noise).squeeze(0) # [action_dim]
-            else:
-                action = env.action_space.sample()
-            last_actions[step % 10] = action
+            # if step > config.warmup_steps:
+            raw_action, env_action = agent.act(state, noise_factor=config.action_noise) # [b, 2], [b, 3]
+            # else:
+            #     env_action = env.action_space.sample()
+            last_actions[step % 10] = raw_action
             if step % 10 == 0:
                 avg_action = np.mean(last_actions, axis=0)
                 print("Avg action: {}".format([round(a, 2) for a in avg_action]))
                 writer.add_scalar("Avg Steering", avg_action[0], step)
                 writer.add_scalar("Avg Accel", avg_action[1], step)
-                writer.add_scalar("Avg Brake", avg_action[2], step)
-            next_state, reward, done, trunc, info = env.step(action)
+            print("Executing env action: {}".format(env_action))
+            next_state, reward, done, trunc, info = env.step(env_action)
             episode_reward += reward
             episode_len += 1
             if episode_len >= config.max_episode_len:
@@ -92,7 +92,7 @@ def train(args):
             print("Step: {}, Reward: {}".format(step, round(reward, 2)))
 
             # Store to buffer.
-            replay_buffer.store(state, action, reward, next_state, done)
+            replay_buffer.store(state, raw_action, reward, next_state, done)
 
             state = next_state
 

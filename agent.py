@@ -73,7 +73,9 @@ class ActorCriticAgent(nn.Module):
             p.requires_grad = False
         self.pi_optimizer.zero_grad()
         pi_out = self.pi(state) # [b, action_dim]
-        pi_loss = -torch.min(self.q1(state, pi_out), self.q2(state, pi_out)).mean()
+        q1_pi_target = self.q1(state, pi_out)
+        q2_pi_target = self.q2(state, pi_out)
+        pi_loss = -torch.min(q1_pi_target, q2_pi_target).mean()
         if writer:
             print("Train PiLoss: {}".format(pi_loss))
             writer.add_scalar("Train PiLoss", pi_loss.detach().item(), step)

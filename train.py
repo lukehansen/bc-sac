@@ -73,10 +73,12 @@ def train(args):
         for step_idx in range(config.steps_per_epoch):
             step = epoch * config.steps_per_epoch + step_idx
             # Interact with environment.
-            # if step > config.warmup_steps:
-            raw_action, env_action = agent.act(state, noise_factor=config.action_noise) # [b, 2], [b, 3]
-            # else:
-            #     env_action = env.action_space.sample()
+            if step > config.warmup_steps:
+                raw_action, env_action = agent.act(state, noise_factor=config.action_noise) # [b, 2], [b, 3]
+            else:
+                raw_action = np.random.uniform(low=-1.0, high=1.0, size=[2])
+                env_action = np.concatenate([raw_action, -raw_action[1:2]])
+                env_action = np.clip(env_action, [-1, 0, 0], [1, 1, 1])
             last_actions[step % 10] = raw_action
             if step % 10 == 0:
                 avg_action = np.mean(last_actions, axis=0)
@@ -85,6 +87,8 @@ def train(args):
                 writer.add_scalar("Avg Accel", avg_action[1], step)
             print("Executing env action: {}".format(env_action))
             next_state, reward, done, trunc, info = env.step(env_action)
+            # DEBUG!!!
+            # reward = 1/(abs(raw_action[1])+0.001) # should make accel 0
             episode_reward += reward
             episode_len += 1
             if episode_len >= config.max_episode_len:

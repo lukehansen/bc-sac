@@ -28,6 +28,8 @@ def train(args):
     if args.toy:
         config.prefill_steps = 10
         config.update_interval = 10
+        config.warmup_steps = 10
+        config.noise = 0
 
     agent = ActorCriticAgent(config).to(config.device)
     if args.resume_run_id:
@@ -65,6 +67,7 @@ def train(args):
     state, _ = env.reset()
     episode_reward = 0
     episode_len = 0
+    last_actions = np.zeros([10, config.action_dim])
     print("Starting training at epoch: {}".format(starting_epoch))
     for epoch in range(starting_epoch, config.num_epochs):
         for step_idx in range(config.steps_per_epoch):
@@ -74,10 +77,18 @@ def train(args):
                 action = agent.act(state, noise=config.action_noise).squeeze(0) # [action_dim]
             else:
                 action = env.action_space.sample()
-            print("Executing action: {}".format([round(a, 2) for a in action]))
+            last_actions[step % 10] = action
+            if step % 10 == 0:
+                avg_action = np.mean(last_actions, axis=0)
+                print("Avg action: {}".format([round(a, 2) for a in avg_action]))
+                writer.add_scalar("Avg Steering", avg_action[0], step)
+                writer.add_scalar("Avg Accel", avg_action[1], step)
+                writer.add_scalar("Avg Brake", avg_action[2], step)
             next_state, reward, done, trunc, info = env.step(action)
             episode_reward += reward
             episode_len += 1
+            if episode_len >= config.max_episode_len:
+                done = True
             print("Step: {}, Reward: {}".format(step, round(reward, 2)))
 
             # Store to buffer.
@@ -87,8 +98,8 @@ def train(args):
 
             if done or trunc:
                 print("Training episode finished, len: {}, reward: {}".format(episode_len, episode_reward))
-                writer.add_scalar("Train Episode Len", episode_len, step_idx)
-                writer.add_scalar("Train Episode Reward", episode_reward, step_idx)
+                writer.add_scalar("Train Episode Len", episode_len, step)
+                writer.add_scalar("Train Episode Reward", episode_reward, step)
                 episode_reward = 0
                 episode_len = 0
                 state, _ = env.reset()
@@ -97,7 +108,8 @@ def train(args):
                 for i in range(config.update_interval):
                     print("Update step {}".format(i))
                     batch = replay_buffer.sample_batch(config.batch_size)
-                    agent.update(batch, step_idx, writer if i == config.update_interval-1 else None) # only log training metrics on last update
+                    agent.update(batch, step, writer if i == config.update_interval-1 else None) # only log training metrics on last update
+                writer.flush()
 
         # Save each epoch
         checkpoint_path = os.path.join(checkpoint_dir, f"model_epoch{epoch}.pt")

@@ -28,8 +28,10 @@ def train(args):
     if args.toy:
         config.prefill_steps = 10
         config.update_interval = 10
-        config.warmup_steps = 10
-        config.action_noise = 0
+        config.warmup_steps = 5000
+        config.action_noise = 0.1
+        config.polyak = 0.6
+        config.gamma = 0.1
 
     agent = ActorCriticAgent(config).to(config.device)
     if args.resume_run_id:
@@ -65,6 +67,7 @@ def train(args):
     replay_buffer = ReplayBuffer(config)
 
     state, _ = env.reset()
+    state = state / 255.0
     episode_reward = 0
     episode_len = 0
     last_actions = np.zeros([10, config.action_dim])
@@ -87,8 +90,9 @@ def train(args):
                 writer.add_scalar("Avg Accel", avg_action[1], step)
             print("Executing env action: {}".format(env_action))
             next_state, reward, done, trunc, info = env.step(env_action)
+            next_state = next_state / 255.0
             # DEBUG!!!
-            # reward = 1/(abs(raw_action[1])+0.001) # should make accel 0
+            reward = 1/(abs(raw_action[1])+0.1) # should make accel 0
             episode_reward += reward
             episode_len += 1
             if episode_len >= config.max_episode_len:

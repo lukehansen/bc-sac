@@ -10,10 +10,10 @@ class BcSacConfig():
         self.gamma = 0.99
         self.polyak = 0.995
         self.action_noise = 0.1 # Not needed for SAC
-        self.max_episode_len = 500
+        self.max_episode_len = 1000
 
         # NN
-        self.pi_lr = 1e-3
-        self.q_lr = 1e-3
-        self.batch_size = 32
-        self.hidden_dim = 256
+        self.pi_lr = 1e-5
+        self.q_lr = 2e-3
+        self.batch_size = 64
+

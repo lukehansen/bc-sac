@@ -55,4 +55,4 @@ class Critic(nn.Module):
         x = F.relu(self.fc1(x)) # [b, 64]
         x = F.relu(self.fc2(x)) # [b, 32]
         q = self.fc3(x) # [b, 1]
-        return q
+        return q.squeeze(1)

@@ -16,7 +16,6 @@ class ActorCriticAgent(nn.Module):
         self.q1 = Critic(config)
         print("Critic params: {}".format(sum([p.numel() for p in self.q1.parameters() if p.requires_grad])))
         self.q2 = Critic(config)
-        self.q_params = itertools.chain(self.q1.parameters(), self.q2.parameters())
 
         # Each with a separate target network only updated via Polyak smoothing.
         self.pi_target = copy.deepcopy(self.pi)
@@ -28,7 +27,7 @@ class ActorCriticAgent(nn.Module):
 
         # Optimizers.
         self.pi_optimizer = torch.optim.Adam(self.pi.parameters(), lr=config.pi_lr)
-        self.q_optimizer = torch.optim.Adam(self.q_params, lr=config.q_lr) # only need one optimizer for both q updates
+        self.q_optimizer = torch.optim.Adam(itertools.chain(self.q1.parameters(), self.q2.parameters()), lr=config.q_lr) # only need one optimizer for both q updates
 
     def update(self, batch, step, writer=None):
         # batch: dict of {
@@ -69,7 +68,7 @@ class ActorCriticAgent(nn.Module):
         self.q_optimizer.step()
 
         # 2. Update Pi. Freeze Q.
-        for p in self.q_params:
+        for p in itertools.chain(self.q1.parameters(), self.q2.parameters()):
             p.requires_grad = False
         self.pi_optimizer.zero_grad()
         pi_out = self.pi(state) # [b, action_dim]
@@ -81,12 +80,12 @@ class ActorCriticAgent(nn.Module):
             writer.add_scalar("Train PiLoss", pi_loss.detach().item(), step)
         pi_loss.backward()
         self.pi_optimizer.step()
-        for p in self.q_params:
+        for p in itertools.chain(self.q1.parameters(), self.q2.parameters()):
             p.requires_grad = True
 
         # 3. Update target networks via Polyak averaging.
         with torch.no_grad():
-            params = itertools.chain(self.pi.parameters(), self.q_params)
+            params = itertools.chain(self.pi.parameters(), self.q1.parameters(), self.q2.parameters())
             target_params = itertools.chain(self.pi_target.parameters(), self.q1_target.parameters(), self.q2_target.parameters())
             for p, p_targ in zip(params, target_params):
                 # In-place as in Spinningup.

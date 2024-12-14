@@ -28,10 +28,10 @@ def train(args):
     if args.toy:
         config.prefill_steps = 10
         config.update_interval = 10
-        config.warmup_steps = 5000
+        config.warmup_steps = 10_000
         config.action_noise = 0.1
         config.polyak = 0.6
-        config.gamma = 0.1
+        config.gamma = 0.9
 
     agent = ActorCriticAgent(config).to(config.device)
     if args.resume_run_id:
@@ -91,8 +91,6 @@ def train(args):
             print("Executing env action: {}".format(env_action))
             next_state, reward, done, trunc, info = env.step(env_action)
             next_state = next_state / 255.0
-            # DEBUG!!!
-            reward = 1/(abs(raw_action[1])+0.1) # should make accel 0
             episode_reward += reward
             episode_len += 1
             if episode_len >= config.max_episode_len:

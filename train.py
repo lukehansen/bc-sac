@@ -20,21 +20,33 @@ VAL_DIR = "expert/validation/"
 
 def test_agent(agent, env):
     total_reward = 0
-    for env_seed in range(42, 50):
+    for env_seed in range(5, 10):
         print("Testing env {}".format(env_seed))
         state, _ = env.reset(seed=env_seed)
         state = state / 255.0
         ep_len = 0
+        num_off_track = 0
         while True:
             action = agent.act(state) # no noise
             next_state, reward, done, trunc, info = env.step(action)
+            # Check if we went off the track (there's a grace at the start while zooming in):
+            if ep_len >= 50 and next_state[71, 48, 1] != 10:
+                print("Off track!")
+                reward = -10
+                num_off_track += 1
+                # Break after 20 consecutive off track events.
+                if num_off_track > 20:
+                    done = True
+            else:
+                num_off_track = 0
             total_reward += reward
             ep_len += 1
-            print("Executed action: {}, reward: {}".format([round(a, 2) for a in action], round(reward, 2)))
+            # print("Executed action: {}, reward: {}".format([round(a, 2) for a in action], round(reward, 2)))
             state = next_state / 255.0
             if done or trunc:
                 break
         print("For episode {}, len: {}, total reward: {}".format(env_seed, ep_len, total_reward))
+    return total_reward / 5.0
 
 def train_or_test(args):
     env = gym.make("CarRacing-v3", render_mode="human", lap_complete_percent=0.95, domain_randomize=False, continuous=True)
@@ -54,6 +66,7 @@ def train_or_test(args):
         config.action_noise = 0.1
         config.polyak = 0.6
         config.gamma = 0.1
+        config.steps_per_epoch = 10
 
     agent = ActorCriticAgent(config).to(config.device)
     if args.resume_run_id:
@@ -141,6 +154,7 @@ def train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent):
     state = state / 255.0
     episode_reward = 0
     episode_len = 0
+    num_off_track = 0
     last_actions = np.zeros([10, config.action_dim])
     print("Starting training at epoch: {}".format(starting_epoch))
     for epoch in range(starting_epoch, config.num_epochs):
@@ -150,24 +164,33 @@ def train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent):
             if step > config.warmup_steps:
                 action = agent.act(state, noise_factor=config.action_noise) # [b, action_dim]
             else:
-                # Dont accel and brake at same time for warmup.
-                raw_action = np.random.uniform(low=-1.0, high=1.0, size=[2])
-                action = np.concatenate([raw_action, -raw_action[1:2]])
-                action = np.clip(action, [-1, 0, 0], [1, 1, 1])
+                action = env.action_space.sample()
             last_actions[step % 10] = action
             if step % 10 == 0:
                 avg_action = np.mean(last_actions, axis=0)
                 print("Avg action: {}".format([round(a, 2) for a in avg_action]))
                 writer.add_scalar("Avg Steering", avg_action[0], step)
                 writer.add_scalar("Avg Accel", avg_action[1], step)
-            print("Executing env action: {}".format(action))
+                writer.add_scalar("Avg Brake", avg_action[2], step)
+            # print("Executing env action: {}".format(action))
             next_state, reward, done, trunc, info = env.step(action)
+            # Check if we went off the track (there's a grace at the start while zooming in):
+            if episode_len >= 50 and next_state[71, 48, 1] != 10:
+                print("Off track!")
+                reward = -10
+                num_off_track += 1
+                # Break after 20 consecutive off track events.
+                if num_off_track > 20:
+                    done = True
+            else:
+                num_off_track = 0
             next_state = next_state / 255.0
+
             episode_reward += reward
             episode_len += 1
             if episode_len >= config.max_episode_len:
                 done = True
-            print("Step: {}, Reward: {}".format(step, round(reward, 2)))
+            # print("Step: {}, Reward: {}".format(step, round(reward, 2)))
 
             # Store to buffer.
             replay_buffer.store(state, action, reward, next_state, done)
@@ -180,7 +203,9 @@ def train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent):
                 writer.add_scalar("Train Episode Reward", episode_reward, step)
                 episode_reward = 0
                 episode_len = 0
+                num_off_track = 0
                 state, _ = env.reset()
+                state = state / 255.0
 
             if replay_buffer.size >= config.prefill_steps and (step+1) % config.update_interval == 0: # update at the end of a round
                 for i in range(config.update_interval):
@@ -188,6 +213,15 @@ def train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent):
                     batch = replay_buffer.sample_batch(config.batch_size)
                     agent.update(batch, step, writer if i == config.update_interval-1 else None) # only log training metrics on last update
                 writer.flush()
+
+        # Test each epoch.
+        avg_test_reward = test_agent(agent, env)
+        writer.add_scalar("Test Avg Reward", avg_test_reward, step)
+        writer.flush()
+        episode_reward = 0
+        episode_len = 0
+        state, _ = env.reset()
+        state = state / 255.0
 
         # Save each epoch
         checkpoint_path = os.path.join(checkpoint_dir, f"model_epoch{epoch}.pt")

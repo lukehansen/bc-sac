@@ -60,6 +60,7 @@ def human_play():
                 print("Starting!")
                 started = True
             next_state, r, terminated, truncated, info = env.step(a)
+            print("Color under car: {}, step: {}".format(next_state[71, 48, 1], steps))
             struct = {
                 "state": state,
                 "action": a.copy(),
@@ -69,13 +70,13 @@ def human_play():
             if started:
                 all_data.append(struct)
             state = next_state
-            print("Action: {}, Reward: {}".format(a, r))
+            # print("Action: {}, Reward: {}".format(a, r))
             time.sleep(0.05)
             total_reward += r
 
             if steps % 10 == 0 and started:
                 fn = os.path.join(TRAIN_DIR, "expert_data_%04d.pkl"%traj_num)
-                print("Saving pickle")
+                # print("Saving pickle")
                 with open(fn, "wb") as f:
                     pickle.dump(all_data, f)
             steps += 1

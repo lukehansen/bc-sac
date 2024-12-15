@@ -9,11 +9,11 @@ class BcSacConfig():
         self.max_buffer_size = 100_000
         self.gamma = 0.99
         self.polyak = 0.995
-        self.action_noise = 0.3 # Not needed for SAC
+        self.action_noise = 0.1 # Not needed for SAC
         self.max_episode_len = 1000
 
         # NN
         self.pi_lr = 1e-5
-        self.q_lr = 2e-3
+        self.q_lr = 1e-3
         self.batch_size = 512
 

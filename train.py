@@ -24,6 +24,7 @@ def test_agent(agent, env):
         state, _ = env.reset(seed=env_seed)
         state = state / 255.0
         ep_len = 0
+        ep_reward = 0
         num_off_track = 0
         while True:
             action = agent.act(state) # no noise
@@ -38,13 +39,14 @@ def test_agent(agent, env):
                     done = True
             else:
                 num_off_track = 0
+            ep_reward += reward
             total_reward += reward
             ep_len += 1
             # print("Executed action: {}, reward: {}".format([round(a, 2) for a in action], round(reward, 2)))
             state = next_state / 255.0
             if done or trunc:
                 break
-        print("For episode {}, len: {}, total reward: {}".format(env_seed, ep_len, total_reward))
+        print("For episode {}, len: {}, total reward: {}".format(env_seed, ep_len, ep_reward))
     return total_reward / 5.0
 
 def train_or_test(args):
@@ -101,7 +103,7 @@ def train_or_test(args):
 
     if args.mode == "test":
         assert args.resume_run_id, "Need a run id!"
-        test_agent(agent, env)
+        print("Avg test reward: {}".format(test_agent(agent, env)))
     elif args.mode == "train_rl":
         train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent)
     else:

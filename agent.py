@@ -97,9 +97,8 @@ class ActorCriticAgent(nn.Module):
         state = torch.as_tensor(state, dtype=torch.float32).to(self.config.device)
         state = state.unsqueeze(0) # [1, h, w, 3]
         with torch.no_grad():
-            means = self.pi(state).cpu().numpy().squeeze(0) # [action_dim], -1 to 1
+            means = self.pi(state).cpu().numpy().squeeze(0) # [action_dim]
         noise = np.random.randn(self.config.action_dim)
-        means = means + noise_factor * noise # [2], maybe out of bounds
-        means = self.config.action_space.low + (means + 1) * (self.config.action_space.high - self.config.action_space.low) / 2
+        means = means + noise_factor * noise # [action_dim], maybe out of bounds now
         means = np.clip(means, self.config.action_space.low, self.config.action_space.high)
         return means # [b, action_dim]

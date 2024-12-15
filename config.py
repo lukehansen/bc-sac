@@ -3,7 +3,7 @@ class BcSacConfig():
         # RL
         self.num_epochs = 100
         self.steps_per_epoch = 4000
-        self.warmup_steps = 100_000
+        self.warmup_steps = 10_000
         self.prefill_steps = 1000 # Fill the buffer before training.
         self.update_interval = 50 # Alternate 50 steps env interaction, 50 steps training.
         self.max_buffer_size = 100_000

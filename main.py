@@ -7,15 +7,15 @@ import numpy as np
 import pygame
 import pickle
 import time
-from train import train
+from train import train_or_test
 
-EXPERT_DIR = "expert/"
+TRAIN_DIR = "expert/train/"
 
 # Modified from Gymnasium.
 def human_play():
-    if not os.path.exists(EXPERT_DIR):
-        os.makedirs(EXPERT_DIR)
-    traj_nums = [int(fn.split("expert_data_")[1].split(".pkl")[0]) for fn in os.listdir(EXPERT_DIR)]
+    if not os.path.exists(TRAIN_DIR):
+        os.makedirs(TRAIN_DIR)
+    traj_nums = [int(fn.split("expert_data_")[1].split(".pkl")[0]) for fn in os.listdir(TRAIN_DIR)]
     traj_num = max(traj_nums) + 1 if traj_nums else 0
 
     a = np.array([0.0, 0.0, 0.0])
@@ -74,7 +74,7 @@ def human_play():
             total_reward += r
 
             if steps % 10 == 0 and started:
-                fn = os.path.join(EXPERT_DIR, "expert_data_%04d.pkl"%traj_num)
+                fn = os.path.join(TRAIN_DIR, "expert_data_%04d.pkl"%traj_num)
                 print("Saving pickle")
                 with open(fn, "wb") as f:
                     pickle.dump(all_data, f)
@@ -84,8 +84,8 @@ def human_play():
     env.close()
 
 def replay():
-    for fn in os.listdir(EXPERT_DIR):
-        pth = os.path.join(EXPERT_DIR, fn)
+    for fn in os.listdir(TRAIN_DIR):
+        pth = os.path.join(TRAIN_DIR, fn)
         print("Replaying file: {}".format(pth))
         with open(pth, "rb") as f:
             all_data = pickle.load(f)
@@ -102,12 +102,13 @@ def replay():
                 #     "next_state": next_state
                 # }
                 action = data["action"]
-                # print("Simulating action: {}".format(action))
+                print("Simulating action: {}".format([round(a, 2) for a in action]))
+                time.sleep(0.05)
                 env.step(data["action"])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["human", "replay", "train_rl", "train_bc"])
+    parser.add_argument("mode", choices=["human", "replay", "train_rl", "train_bc", "test"])
     parser.add_argument("--resume_run_id", type=str, default=None, help="Run ID to resume training from.")
     parser.add_argument("--toy", action="store_true", default=False, help="Just for debugging.")
     args = parser.parse_args()
@@ -115,5 +116,5 @@ if __name__ == "__main__":
         human_play()
     elif args.mode == "replay":
         replay()
-    elif "train" in args.mode:
-        train(args)
+    elif "train" in args.mode or "test" in args.mode:
+        train_or_test(args)

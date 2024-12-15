@@ -4,11 +4,14 @@ from torch import nn
 import torch.nn.functional as F
 
 # Start with DDPG and then extend to SAC.
-# Actor policy: obs -> mean, std dev for each action
+# Actor policy: obs -> mean for each action
 # Critic: Q-function taking s, a -> rew
 class Actor(nn.Module):
     def __init__(self, config):
         super().__init__()
+        # So they move with device.
+        self.register_buffer("scale", torch.tensor((config.action_space.high - config.action_space.low) / 2))
+        self.register_buffer("shift",  torch.tensor(config.action_space.low) + self.scale)
         self.cnn = nn.Sequential(
             nn.Conv2d(3, 16, 5, stride=4, bias=False),
             nn.ReLU(),
@@ -27,8 +30,10 @@ class Actor(nn.Module):
         x = x.flatten(1) # [b, 32 * h * w]
         x = F.relu(self.fc1(x)) # [b, 64]
         means = F.tanh(self.fc2(x)) # [b, action_dim], -1 to 1
-        # log_std_devs = self.log_std_dev(x) # [b, action_dim]
-        return means #, log_std_devs
+
+        # Scale to action space
+        means = means * self.scale + self.shift
+        return means
 
 class Critic(nn.Module):
     def __init__(self, config):

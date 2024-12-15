@@ -1,5 +1,4 @@
 import random
-import time
 from datetime import datetime
 import os
 import pickle
@@ -86,8 +85,8 @@ def train_or_test(args):
         # Load model and optimizer.
         checkpoint = torch.load(checkpoint_path)
         agent.load_state_dict(checkpoint['model_state_dict'])
-        agent.pi_optimizer.load_state_dict(checkpoint['pi_optimizer_state_dict'])
-        agent.q_optimizer.load_state_dict(checkpoint['q_optimizer_state_dict'])
+        # agent.pi_optimizer.load_state_dict(checkpoint['pi_optimizer_state_dict'])
+        # agent.q_optimizer.load_state_dict(checkpoint['q_optimizer_state_dict'])
         starting_epoch = checkpoint['epoch'] + 1 # saved out at the end so we should start from the next one
     else:
         starting_epoch = 0
@@ -194,12 +193,6 @@ def train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent):
             else:
                 action = env.action_space.sample()
             last_actions[step % 10] = action
-            if step % 10 == 0:
-                avg_action = np.mean(last_actions, axis=0)
-                print("Avg action: {}".format([round(a, 2) for a in avg_action]))
-                writer.add_scalar("Avg Steering", avg_action[0], step)
-                writer.add_scalar("Avg Accel", avg_action[1], step)
-                writer.add_scalar("Avg Brake", avg_action[2], step)
             # print("Executing env action: {}".format(action))
             next_state, reward, done, trunc, info = env.step(action)
             # Check if we went off the track (there's a grace at the start while zooming in):
@@ -214,11 +207,18 @@ def train_rl(config, checkpoint_dir, writer, starting_epoch, env, agent):
                 num_off_track = 0
             next_state = next_state / 255.0
 
+            if step % 10 == 0:
+                avg_action = np.mean(last_actions, axis=0)
+                # print("Avg action: {}".format([round(a, 2) for a in avg_action]))
+                print("Step: {}, Reward: {}".format(step, round(reward, 2)))
+                writer.add_scalar("Avg Steering", avg_action[0], step)
+                writer.add_scalar("Avg Accel", avg_action[1], step)
+                writer.add_scalar("Avg Brake", avg_action[2], step)
+
             episode_reward += reward
             episode_len += 1
             if episode_len >= config.max_episode_len:
                 done = True
-            # print("Step: {}, Reward: {}".format(step, round(reward, 2)))
 
             # Store to buffer.
             replay_buffer.store(state, action, reward, next_state, done)

@@ -7,6 +7,7 @@ import numpy as np
 import pygame
 import pickle
 import time
+from train import train
 
 EXPERT_DIR = "expert/"
 
@@ -106,9 +107,13 @@ def replay():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["human", "replay"])
+    parser.add_argument("mode", choices=["human", "replay", "train_rl", "train_bc"])
+    parser.add_argument("--resume_run_id", type=str, default=None, help="Run ID to resume training from.")
+    parser.add_argument("--toy", action="store_true", default=False, help="Just for debugging.")
     args = parser.parse_args()
     if args.mode == "human":
         human_play()
     elif args.mode == "replay":
         replay()
+    elif "train" in args.mode:
+        train(args)

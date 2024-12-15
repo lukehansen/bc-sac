@@ -115,10 +115,19 @@ def train_bc(config, checkpoint_dir, writer, starting_epoch, agent):
         print("Training BC from file: {}".format(pth))
         with open(pth, "rb") as f:
             all_data = pickle.load(f)
-        dataset.extend([{
-            "state": torch.tensor(d["state"]),
-            "action": torch.tensor(d["action"])
-        } for d in all_data if type(d) != int])
+        # Work backwards to compute total discounted reward for each step and add to dataset.
+        discounted_reward = 0
+        for d in reversed(all_data):
+            if type(d) == int:
+                # We started a new episode.
+                discounted_reward = 0
+                continue
+            discounted_reward = d["reward"] + config.gamma*discounted_reward
+            dataset.append({
+                "state": torch.tensor(d["state"]/255.0, dtype=torch.float32),
+                "action": torch.tensor(d["action"], dtype=torch.float32),
+                "q_target": torch.tensor(discounted_reward, dtype=torch.float32)
+            })
 
     print("Dataset size: {}".format(len(dataset)))
     print("Starting training at epoch: {}".format(starting_epoch))
@@ -126,15 +135,34 @@ def train_bc(config, checkpoint_dir, writer, starting_epoch, agent):
         for step_idx in range(config.steps_per_epoch):
             step = epoch * config.steps_per_epoch + step_idx
             batch = random.sample(dataset, config.batch_size)
-            batch_state = torch.stack([b["state"]/255.0 for b in batch]).to(config.device)
+            batch_state = torch.stack([b["state"] for b in batch]).to(config.device)
             gt_action = torch.stack([b["action"] for b in batch]).to(config.device)
+            gt_q = torch.stack([b["q_target"] for b in batch]).to(config.device)
+
+            # Train policy with BC.
             agent.pi_optimizer.zero_grad()
             pred_action = agent.pi(batch_state)
-            loss = ((pred_action - gt_action)**2).mean()
-            loss.backward()
+            pi_loss = ((pred_action - gt_action)**2).mean()
+            pi_loss.backward()
             agent.pi_optimizer.step()
-            print("Step: {}, loss: {}".format(step, loss))
-            writer.add_scalar("BC loss", loss.item(), step)
+
+            # Train Q network with the expert rollout. (Just train one then copy to other at the end.)
+            agent.q_optimizer.zero_grad()
+            pred_q = agent.q1(batch_state, gt_action)
+            q_loss = ((pred_q - gt_q)**2).mean()
+            q_loss.backward()
+            agent.q_optimizer.step()
+
+            print("Step: {}, pi loss: {}, q loss: {}".format(step, pi_loss, q_loss))
+            writer.add_scalar("BC Pi loss", pi_loss.item(), step)
+            writer.add_scalar("BC Q loss", q_loss.item(), step)
+            writer.flush()
+
+        # Important: copy to the target networks since we didn't train those.
+        agent.pi_target.load_state_dict(agent.pi.state_dict())
+        agent.q2.load_state_dict(agent.q1.state_dict())
+        agent.q1_target.load_state_dict(agent.q1.state_dict())
+        agent.q2_target.load_state_dict(agent.q1.state_dict())
 
         # Save each epoch
         checkpoint_path = os.path.join(checkpoint_dir, f"model_epoch{epoch}.pt")

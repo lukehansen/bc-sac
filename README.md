@@ -22,9 +22,10 @@ So far this implementation includes:
 
 The BC policy trained on just a few laps is pretty good but sometimes goes off road and then loses control (none of the expert demonstrations went significantly off road). It gets an average reward of 315 on test tracks not seen during training (with a negative reward added for going off the track). Interestingly, slowing it down just a bit by adding some braking improves the results dramatically.
 
-<video src=".github/bc_policy.mp4" controls="controls" style="max-width: 20%;">
+<!-- <video src=".github/bc_policy.mp4" controls="controls" style="max-width: 20%;">
     Your browser does not support the video tag.
-</video>
+</video> -->
+<img src=".github/bc_policy.gif">
 
 The RL component, when trained with negative reward for going off the track, should improve these scenarios.
 
